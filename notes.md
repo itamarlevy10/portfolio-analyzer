@@ -29,8 +29,9 @@
 - Press Enter on amount to add next asset row
 
 ## Feature Ideas
-am i having fun today?
+- am i having fun today?
 show today's performence and say what percentage of days it's better than
+- a check box next to my portfolio history performance graph the allows me to not show each one of the lines in the graph so i can use whatever parts of it that i want
 
 ### Build My Portfolio (new feature)
 - Separate flow from "Analyze My Portfolio"
