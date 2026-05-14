@@ -70,6 +70,8 @@ section[data-testid="stSidebar"] > div { padding-top: 0 !important; }
     padding-left: 2.2rem !important;
     padding-right: 2.2rem !important;
     max-width: 1400px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
 }
 
 /* ── Sidebar inputs ────────────────────────────────────────────────── */
@@ -226,25 +228,34 @@ section[data-testid="stSidebar"] > div { padding-top: 0 !important; }
 }
 
 /* ── Per-asset metric cards (inside expanders) ─────────────────────── */
-[data-testid="stMetric"] {
-    background: #FFFFFF !important;
-    border-radius: 12px !important;
-    padding: 14px 16px !important;
-    border: 1px solid #E8ECF2 !important;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.06) !important;
+.asset-metric-card {
+    background: #FFFFFF;
+    border-radius: 12px;
+    padding: 14px 16px 12px;
+    border: 1px solid #E8ECF2;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    height: 100%;
 }
-[data-testid="stMetricLabel"] > div {
-    font-size: 10px !important;
-    text-transform: uppercase !important;
-    letter-spacing: 0.06em !important;
-    color: #6B7A8D !important;
-    font-weight: 600 !important;
+.asset-metric-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #6B7A8D;
+    font-weight: 600;
+    margin-bottom: 4px;
 }
-[data-testid="stMetricValue"] > div {
-    font-size: 24px !important;
-    font-weight: 700 !important;
-    color: #0A1628 !important;
-    letter-spacing: -0.025em !important;
+.asset-metric-value {
+    font-size: 26px;
+    font-weight: 700;
+    color: #0A1628;
+    letter-spacing: -0.025em;
+    line-height: 1.1;
+    margin-bottom: 6px;
+}
+.asset-metric-explain {
+    font-size: 11px;
+    color: #6B7A8D;
+    line-height: 1.4;
 }
 
 /* ── Dataframes ────────────────────────────────────────────────────── */
@@ -987,7 +998,7 @@ for i, row in enumerate(st.session_state.holdings_rows):
     ticker = row.get("ticker", "")
 
     if not ticker:
-        # Single search box — type anything, results appear from Yahoo Finance
+        # Single search box — results appear as suggestion buttons below
         query = st.sidebar.text_input(
             f"Search {i+1}",
             placeholder="Search: Apple, AAPL, SPY...",
@@ -997,22 +1008,15 @@ for i, row in enumerate(st.session_state.holdings_rows):
         if query and len(query) >= 2:
             results = _search_assets(query)
             if results:
-                options_labels = [f"{r['name']} ({r['symbol']})" for r in results]
-                chosen = st.sidebar.selectbox(
-                    f"Select {i+1}",
-                    options=[""] + options_labels,
-                    key=f"results_{i}",
-                    label_visibility="collapsed",
-                )
-                if chosen:
-                    sym = extract_ticker(chosen)
-                    name_map = {f"{r['name']} ({r['symbol']})": r["name"] for r in results}
-                    st.session_state.holdings_rows[i]["ticker"] = sym
-                    st.session_state.holdings_rows[i]["name"] = name_map.get(chosen, TICKER_TO_NAME.get(sym, ""))
-                    if f"search_{i}" in st.session_state:
-                        del st.session_state[f"search_{i}"]
-                    st.rerun()
-            elif query:
+                for r in results:
+                    btn_label = f"{r['name']}  ({r['symbol']})"
+                    if st.sidebar.button(btn_label, key=f"pick_{i}_{r['symbol']}", use_container_width=True):
+                        st.session_state.holdings_rows[i]["ticker"] = r["symbol"]
+                        st.session_state.holdings_rows[i]["name"] = r["name"]
+                        if f"search_{i}" in st.session_state:
+                            del st.session_state[f"search_{i}"]
+                        st.rerun()
+            else:
                 st.sidebar.caption("No results — try a different name or ticker")
     else:
         # Holding card visual
@@ -1180,11 +1184,38 @@ else:
     import math
     has_metrics = not math.isnan(annual_ret)
 
-    _period_display_map = {"6mo": "6M", "1y": "1Y", "2y": "2Y", "5y": "5Y"}
-    active_period = _period_display_map.get(period_used, "1Y")
+    _DASH_PERIODS   = ["1D", "1W", "1M", "6M", "YTD", "1Y", "ALL"]
+    _DASH_PERIOD_YF = {"1D": "5d", "1W": "1mo", "1M": "1mo", "6M": "6mo", "YTD": "ytd", "1Y": "1y", "ALL": "max"}
+    _YF_TO_DASH     = {"5d": "1D", "1mo": "1M", "6mo": "6M", "ytd": "YTD", "1y": "1Y", "2y": "1Y", "max": "ALL"}
+    _active_dash    = _YF_TO_DASH.get(period_used, "1Y")
+
+    # Working period buttons (rendered above the card so they're real Streamlit widgets)
+    _sp, _pr = st.columns([3, 4])
+    with _pr:
+        _pcols = st.columns(len(_DASH_PERIODS), gap="small")
+        for _j, _lbl in enumerate(_DASH_PERIODS):
+            with _pcols[_j]:
+                _is_act = _lbl == _active_dash
+                if st.button(_lbl, key=f"dp_{_lbl}", type="primary" if _is_act else "secondary", use_container_width=True):
+                    _np = _DASH_PERIOD_YF[_lbl]
+                    if _np != period_used:
+                        with st.spinner("Updating..."):
+                            _np_prices = build_portfolio(holdings, period=_np)
+                            _np_returns = calculate_returns(_np_prices)
+                            _np_summary = get_portfolio_summary(_np_returns, benchmark=benchmark_ticker)
+                            _np_pm = calculate_portfolio_metrics(_np_returns, holdings, risk_free_rate=_np_summary["risk_free_rate"])
+                        st.session_state["analysis"].update({
+                            "returns": _np_returns, "summary": _np_summary,
+                            "portfolio_metrics": _np_pm, "period": _np,
+                        })
+                        st.session_state.pop("cum_ret_lines", None)
+                        st.rerun()
+
+    _period_label_map = {"5d": "last week", "1mo": "last month", "6mo": "6 months ago",
+                         "ytd": "at the start of the year", "1y": "a year ago",
+                         "2y": "2 years ago", "max": "at the start"}
 
     if total_invested and total_invested > 0 and has_metrics:
-        # current value interpretation: user entered current holding values
         cur_val = total_invested
         prev_val = cur_val / (1 + annual_ret) if (1 + annual_ret) != 0 else cur_val
         change_amt = cur_val - prev_val
@@ -1193,12 +1224,11 @@ else:
         badge_cls = "pv-badge" if pos else "pv-badge neg"
         sign = "+" if pos else ""
 
-        # ILS conversion from ticker data
         ils_rate = None
         if "USD/ILS" in tickers_data and tickers_data["USD/ILS"][0]:
             ils_rate = tickers_data["USD/ILS"][0]
 
-        compare_text = f"vs. {csym}{prev_val:,.0f} a year ago"
+        compare_text = f"vs. {csym}{prev_val:,.0f} {_period_label_map.get(period_used, 'a year ago')}"
         if ils_rate and csym == "$":
             ils_val = cur_val * ils_rate
             compare_text += f" &nbsp;·&nbsp; ≈ ₪{ils_val:,.0f}"
@@ -1206,65 +1236,103 @@ else:
         int_part = f"{int(cur_val):,}"
         dec_part = f"{cur_val % 1:.2f}"[1:]
 
-        time_btns = ""
-        for lbl in ["1D", "1W", "1M", "6M", "YTD", "1Y", "ALL"]:
-            active_cls = " active" if lbl == active_period else ""
-            time_btns += f'<button class="pv-time-btn{active_cls}">{lbl}</button>'
+        _period_desc = _period_label_map.get(period_used, "a year ago")
+        if pos:
+            _motivation = (f"If you had invested {csym}{prev_val:,.0f} {_period_desc}, "
+                           f"you'd already have <strong>{csym}{cur_val:,.0f}</strong> today "
+                           f"— a gain of +{change_pct:.1f}%!")
+            _mot_color = "#16A34A"
+        else:
+            _motivation = (f"Your portfolio is down {abs(change_pct):.1f}% over this period. "
+                           f"Market downturns are temporary — stay the course.")
+            _mot_color = "#D97706"
 
         st.markdown(f"""
 <div class="pv-card">
   <div class="pv-label">
     PORTFOLIO VALUE &nbsp;·&nbsp; {csym.replace("$","USD").replace("₪","ILS").replace("€","EUR")} VALUE
-    <div class="pv-time-btns">{time_btns}</div>
   </div>
   <div class="pv-amount">{csym}{int_part}<span class="cents">{dec_part}</span></div>
   <div class="pv-change-row">
     <span class="{badge_cls}">{sign}{csym}{abs(change_amt):,.0f} &nbsp;·&nbsp; {sign}{change_pct:.1f}%</span>
     <span class="pv-compare">{compare_text}</span>
   </div>
-  <div class="pv-stats-row">
-    <div>
-      <div class="pv-stat-label">ANNUAL RETURN</div>
-      <div class="pv-stat-val {'pos' if annual_ret >= 0 else 'neg'}">{sign}{annual_ret*100:.1f}%</div>
-    </div>
-    <div>
-      <div class="pv-stat-label">VOLATILITY</div>
-      <div class="pv-stat-val neutral">{pm['volatility']*100:.1f}%</div>
-    </div>
-    <div>
-      <div class="pv-stat-label">SHARPE</div>
-      <div class="pv-stat-val {'pos' if pm['sharpe']>1 else 'neutral'}">{pm['sharpe']:.2f}</div>
-    </div>
-    <div>
-      <div class="pv-stat-label">ASSETS</div>
-      <div class="pv-stat-val neutral">{len(holdings)}</div>
-    </div>
+  <div style="padding-top:14px;border-top:1px solid #F0F4F8;font-size:14px;color:{_mot_color};font-weight:500;line-height:1.5">
+    {_motivation}
   </div>
 </div>
 """, unsafe_allow_html=True)
 
     elif has_metrics:
-        # weight-only mode — show return stats
         annual_ret = pm.get("annual_return", 0.0)
         pos = annual_ret >= 0
         sign = "+" if pos else ""
+        _period_desc = _period_label_map.get(period_used, "a year ago")
+        if pos:
+            _motivation = f"Up {sign}{annual_ret*100:.1f}% over this period — keep it up!"
+            _mot_color = "#16A34A"
+        else:
+            _motivation = f"Down {annual_ret*100:.1f}% over this period. Markets recover — stay patient."
+            _mot_color = "#D97706"
         st.markdown(f"""
 <div class="pv-card">
-  <div class="pv-label">PORTFOLIO PERFORMANCE &nbsp;·&nbsp; {active_period}</div>
+  <div class="pv-label">PORTFOLIO PERFORMANCE &nbsp;·&nbsp; {_active_dash}</div>
   <div class="pv-amount" style="font-size:40px">{sign}{annual_ret*100:.1f}<span class="cents">%</span></div>
   <div class="pv-change-row">
     <span class="{'pv-badge' if pos else 'pv-badge neg'}">Annual Return</span>
-    <span class="pv-compare">Based on {len(holdings)} assets over {period_used}</span>
+    <span class="pv-compare">Based on {len(holdings)} assets</span>
   </div>
-  <div class="pv-stats-row">
-    <div><div class="pv-stat-label">VOLATILITY</div><div class="pv-stat-val neutral">{pm['volatility']*100:.1f}%</div></div>
-    <div><div class="pv-stat-label">SHARPE</div><div class="pv-stat-val {'pos' if pm['sharpe']>1 else 'neutral'}">{pm['sharpe']:.2f}</div></div>
-    <div><div class="pv-stat-label">MAX DRAWDOWN</div><div class="pv-stat-val neg">{pm['max_drawdown']*100:.1f}%</div></div>
+  <div style="padding-top:14px;border-top:1px solid #F0F4F8;font-size:14px;color:{_mot_color};font-weight:500">
+    {_motivation}
   </div>
 </div>
 """, unsafe_allow_html=True)
 
-    st.success(f"Analysis complete — {len(holdings)} assets over {period_used}")
+    st.divider()
+
+    # ── Cumulative Returns (second after dashboard) ───────────────
+    st.markdown('<div class="section-head">Cumulative Returns <span class="sub">How $10,000 grows over time</span></div>', unsafe_allow_html=True)
+
+    _cum_all = (1 + returns).cumprod() * 10000
+    _w_map   = {h["ticker"]: h["weight"] for h in holdings}
+    _port_daily_r = sum(returns[tk] * _w_map[tk] for tk in returns.columns if tk in _w_map)
+    _port_cum = (1 + _port_daily_r).cumprod() * 10000
+    _all_lines = list(_cum_all.columns) + ["My Portfolio"]
+
+    if "cum_ret_lines" not in st.session_state:
+        st.session_state["cum_ret_lines"] = _all_lines
+
+    _chart_slot = st.empty()
+
+    _sel_lines = st.multiselect(
+        "Visible lines", options=_all_lines, key="cum_ret_lines",
+        label_visibility="collapsed",
+    )
+
+    _fig_r = go.Figure()
+    for _tk in _cum_all.columns:
+        if _tk in _sel_lines:
+            _fig_r.add_trace(go.Scatter(
+                x=_cum_all.index, y=_cum_all[_tk].round(2), name=_tk, mode="lines",
+                hovertemplate=f"<b>{_tk}</b><br>%{{x|%b %d, %Y}}: $%{{y:,.0f}}<extra></extra>",
+            ))
+    if "My Portfolio" in _sel_lines:
+        _fig_r.add_trace(go.Scatter(
+            x=_port_cum.index, y=_port_cum.round(2), name="My Portfolio",
+            mode="lines", line=dict(color="#2563EB", width=3),
+            hovertemplate="<b>My Portfolio</b><br>%{x|%b %d, %Y}: $%{y:,.0f}<extra></extra>",
+        ))
+    _fig_r.add_hline(y=10000, line_dash="dash", line_color="rgba(255,255,255,0.15)",
+                     annotation_text="Starting value", annotation_font_color="#7A8AA0")
+    _fig_r.update_layout(**_chart_layout(
+        xaxis_title="Date", yaxis_title="Value ($)", hovermode="closest",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1,
+                    font=dict(color="#B7C2D2")),
+        height=440,
+    ))
+    _chart_slot.plotly_chart(_fig_r, use_container_width=True)
+
+    st.divider()
 
     # ── Risk Metrics ──────────────────────────────────────────────
     st.markdown("""
@@ -1283,8 +1351,8 @@ else:
         # compute average beta across assets
         beta_v = float(summary["beta"].mean()) if not summary["beta"].empty else 1.0
 
-        row1 = st.columns(3, gap="small")
-        row2 = st.columns(2, gap="small")
+        row1 = st.columns(3, gap="medium")
+        row2 = st.columns(2, gap="medium")
 
         # Sharpe
         bl, bc = _badge("sharpe", sharpe_v)
@@ -1294,7 +1362,7 @@ else:
                 "SHARPE RATIO",
                 f"{sharpe_v:.2f}",
                 bl, bc,
-                explain_sharpe(sharpe_v)[:28] + "...",
+                explain_sharpe(sharpe_v),
                 _segs(bc, fc),
                 "Return per unit of risk. Above 1 is good, above 2 is excellent.",
             ), unsafe_allow_html=True)
@@ -1321,7 +1389,7 @@ else:
                 f"BETA VS {bench_name}",
                 f"{beta_v:.2f}",
                 bl, bc,
-                explain_beta(beta_v)[:28] + "...",
+                explain_beta(beta_v),
                 _segs("blue", fc),
                 "Sensitivity to market moves. 1.0 = moves with the market.",
             ), unsafe_allow_html=True)
@@ -1365,68 +1433,44 @@ else:
 
     for ticker in returns.columns:
         with st.expander(f"{ticker}"):
-            c1, c2, c3, c4, c5 = st.columns(5)
-            c1.metric("Volatility",   f"{summary['volatility'][ticker]*100:.1f}%")
-            c2.metric("Sharpe",       round(summary['sharpe'][ticker], 2))
-            c3.metric("Beta",         round(summary['beta'][ticker], 2))
-            c4.metric("Max Drawdown", f"{summary['max_drawdown'][ticker]*100:.1f}%")
-            c5.metric("Daily VaR 95%",f"{summary['var_95'][ticker]*100:.2f}%")
-            st.caption(explain_volatility(summary['volatility'][ticker]))
-            st.caption(explain_sharpe(summary['sharpe'][ticker]))
-            st.caption(explain_beta(summary['beta'][ticker]))
-            st.caption(explain_max_drawdown(summary['max_drawdown'][ticker]))
-            st.caption(explain_var(summary['var_95'][ticker]))
-
-    st.divider()
-
-    # ── Correlation Matrix ────────────────────────────────────────
-    st.markdown('<div class="section-head">Correlation Matrix</div>', unsafe_allow_html=True)
-    st.dataframe(summary['correlation'].round(2), use_container_width=True)
-
-    st.divider()
-
-    # ── Cumulative Returns chart ──────────────────────────────────
-    st.markdown('<div class="section-head">Cumulative Returns <span class="sub">How $10,000 grows over time</span></div>', unsafe_allow_html=True)
-
-    cumulative = (1 + returns).cumprod() * 10000
-    fig_r = go.Figure()
-    for tk in cumulative.columns:
-        fig_r.add_trace(go.Scatter(
-            x=cumulative.index, y=cumulative[tk].round(2), name=tk, mode="lines",
-            hovertemplate=f"<b>{tk}</b><br>%{{x|%b %d, %Y}}: $%{{y:,.0f}}<extra></extra>",
-        ))
-
-    weights = {h["ticker"]: h["weight"] for h in holdings}
-    port_daily = sum(
-        returns[tk] * weights[tk] for tk in returns.columns if tk in weights
-    )
-    port_cum = (1 + port_daily).cumprod() * 10000
-    fig_r.add_trace(go.Scatter(
-        x=port_cum.index, y=port_cum.round(2), name="My Portfolio",
-        mode="lines", line=dict(color="#2563EB", width=3),
-        hovertemplate="<b>My Portfolio</b><br>%{x|%b %d, %Y}: $%{y:,.0f}<extra></extra>",
-    ))
-    fig_r.add_hline(y=10000, line_dash="dash", line_color="rgba(255,255,255,0.15)",
-                    annotation_text="Starting value", annotation_font_color="#7A8AA0")
-    fig_r.update_layout(**_chart_layout(
-        xaxis_title="Date", yaxis_title="Value ($)", hovermode="x unified",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1,
-                    font=dict(color="#B7C2D2")),
-        height=440,
-    ))
-    st.plotly_chart(fig_r, use_container_width=True)
+            _ac1, _ac2, _ac3, _ac4, _ac5 = st.columns(5, gap="small")
+            _asset_metrics = [
+                ("VOLATILITY",    f"{summary['volatility'][ticker]*100:.1f}%",  explain_volatility(summary['volatility'][ticker])),
+                ("SHARPE",        f"{summary['sharpe'][ticker]:.2f}",            explain_sharpe(summary['sharpe'][ticker])),
+                ("BETA",          f"{summary['beta'][ticker]:.2f}",              explain_beta(summary['beta'][ticker])),
+                ("MAX DRAWDOWN",  f"{summary['max_drawdown'][ticker]*100:.1f}%", explain_max_drawdown(summary['max_drawdown'][ticker])),
+                ("DAILY VAR 95%", f"{summary['var_95'][ticker]*100:.2f}%",       explain_var(summary['var_95'][ticker])),
+            ]
+            for _col, (_lbl, _val, _exp) in zip([_ac1, _ac2, _ac3, _ac4, _ac5], _asset_metrics):
+                with _col:
+                    st.markdown(f"""
+<div class="asset-metric-card">
+  <div class="asset-metric-label">{_lbl}</div>
+  <div class="asset-metric-value">{_val}</div>
+  <div class="asset-metric-explain">{_exp}</div>
+</div>""", unsafe_allow_html=True)
 
     st.divider()
 
     # ── Correlation heatmap ───────────────────────────────────────
     st.markdown('<div class="section-head">Correlation Heatmap <span class="sub">Lower = better diversification</span></div>', unsafe_allow_html=True)
+    _hm_scale = [[0.0, "#3B1A1A"], [0.25, "#7C2D2D"], [0.5, "#1E293B"],
+                 [0.75, "#1D4ED8"], [1.0, "#93C5FD"]]
     fig_hm = px.imshow(
-        summary['correlation'].round(2), text_auto=True,
-        color_continuous_scale="RdYlGn", zmin=-1, zmax=1, aspect="auto",
+        summary['correlation'].round(2), text_auto=".2f",
+        color_continuous_scale=_hm_scale, zmin=-1, zmax=1, aspect="auto",
+    )
+    fig_hm.update_traces(
+        textfont=dict(color="#FFFFFF", size=13, family="JetBrains Mono"),
     )
     fig_hm.update_layout(**_chart_layout(
-        height=400,
-        coloraxis_colorbar=dict(tickfont=dict(color="#7A8AA0"), title=dict(font=dict(color="#7A8AA0"))),
+        height=max(300, len(returns.columns) * 70),
+        coloraxis_colorbar=dict(
+            tickfont=dict(color="#7A8AA0", size=11),
+            title=dict(text="r", font=dict(color="#7A8AA0")),
+            thickness=14,
+        ),
+        margin=dict(l=8, r=8, t=20, b=8),
     ))
     st.plotly_chart(fig_hm, use_container_width=True)
 
