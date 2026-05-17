@@ -7,8 +7,10 @@ import random
 from datetime import datetime, timezone, timedelta
 import pytz
 from main import build_portfolio, calculate_returns, get_sector_exposure
+import sys, os; sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+from _navbar import render_navbar
 from risk_metrics import get_portfolio_summary, calculate_portfolio_metrics
-from optimizer import get_efficient_frontier, get_efficient_frontier_line
+from optimizer import get_efficient_frontier, get_efficient_frontier_line, optimize_portfolio
 from backtester import run_backtest
 import anthropic
 
@@ -650,34 +652,7 @@ def _chart_layout(**extra):
     base.update(extra)
     return base
 
-# ── Live market tickers ───────────────────────────────────────────────────────
-@st.cache_data(ttl=60)
-def _fetch_tickers():
-    symbols = {"SPY": "SPY", "VIX": "^VIX", "USD/ILS": "ILS=X", "TA-125": "^TA125.TA"}
-    out = {}
-    for name, sym in symbols.items():
-        try:
-            fi = yf.Ticker(sym).fast_info
-            cur = fi.last_price
-            prev = fi.previous_close
-            if cur and prev and prev != 0:
-                out[name] = (float(cur), float((cur - prev) / prev * 100))
-            elif cur:
-                out[name] = (float(cur), 0.0)
-            else:
-                out[name] = (None, None)
-        except Exception:
-            out[name] = (None, None)
-    return out
-
-def _market_open():
-    eastern = pytz.timezone("America/New_York")
-    now_et = datetime.now(pytz.utc).astimezone(eastern)
-    if now_et.weekday() >= 5:
-        return False
-    open_t = now_et.replace(hour=9, minute=30, second=0, microsecond=0)
-    close_t = now_et.replace(hour=16, minute=0, second=0, microsecond=0)
-    return open_t <= now_et <= close_t
+render_navbar()
 
 @st.cache_data(ttl=30)
 def _search_assets(query):
@@ -692,74 +667,6 @@ def _search_assets(query):
     except Exception:
         return []
 
-tickers_data = _fetch_tickers()
-market_open = _market_open()
-
-def _ticker_html(name, val, chg):
-    if val is None:
-        return f'<span class="nav-tick"><span class="nt-name">{name}</span></span>'
-    color = "#4ADE80" if chg >= 0 else "#F87171"
-    sign = "+" if chg >= 0 else ""
-    return (f'<span class="nav-tick">'
-            f'<span class="nt-name">{name}</span>'
-            f'<span class="nt-val">{val:,.2f}</span>'
-            f'<span class="nt-chg" style="color:{color}">{sign}{chg:.2f}%</span>'
-            f'</span>')
-
-tickers_html = "&nbsp;&nbsp;&nbsp;".join(
-    _ticker_html(n, v, c) for n, (v, c) in tickers_data.items()
-)
-market_label = "● Markets Open" if market_open else "○ Markets Closed"
-market_class = "open" if market_open else "closed"
-
-st.markdown(f"""
-<style>
-.navbar {{
-    position: fixed; top: 0; left: 0; right: 0; height: 52px;
-    background: #0A1421; border-bottom: 1px solid rgba(255,255,255,0.08);
-    z-index: 999999; display: flex; align-items: center;
-    padding: 0 20px; gap: 20px;
-    font-family: 'Inter', sans-serif;
-}}
-.nav-brand {{ display: flex; align-items: center; gap: 9px; min-width: 210px; }}
-.nav-logo {{
-    width: 30px; height: 30px; background: #2563EB; border-radius: 7px;
-    display: flex; align-items: center; justify-content: center;
-}}
-.nav-logo svg {{ display: block; }}
-.nav-name {{ font-size: 14.5px; font-weight: 600; color: #FFFFFF; letter-spacing: -0.01em; }}
-.nav-tickers {{ display: flex; align-items: center; flex: 1; overflow: hidden; }}
-.nav-tick {{ display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }}
-.nt-name {{ font-size: 12.5px; color: #7A8AA0; font-weight: 500; }}
-.nt-val {{ font-size: 12.5px; color: #E2E8F0; font-weight: 600; font-family: 'JetBrains Mono', monospace; }}
-.nt-chg {{ font-size: 11.5px; font-family: 'JetBrains Mono', monospace; }}
-.nav-right {{ display: flex; align-items: center; gap: 10px; flex-shrink: 0; }}
-.market-badge {{
-    font-size: 11.5px; font-weight: 500; padding: 4px 10px; border-radius: 20px; border: 1px solid; white-space: nowrap;
-}}
-.market-badge.open {{ color: #4ADE80; border-color: rgba(74,222,128,0.3); background: rgba(74,222,128,0.08); }}
-.market-badge.closed {{ color: #F87171; border-color: rgba(248,113,113,0.3); background: rgba(248,113,113,0.08); }}
-.nav-avatar {{
-    width: 30px; height: 30px; border-radius: 50%; background: #2563EB;
-    color: white; display: flex; align-items: center; justify-content: center;
-    font-size: 11px; font-weight: 700; cursor: pointer;
-}}
-</style>
-<div class="navbar">
-    <div class="nav-brand">
-        <div class="nav-logo">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <polyline points="1,12 5,6 8,9 11,4 15,7" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-            </svg>
-        </div>
-        <span class="nav-name">Portfolio Analyzer</span>
-    </div>
-    <div class="nav-tickers">{tickers_html}</div>
-    <div class="nav-right">
-        <span class="market-badge {market_class}">{market_label}</span>
-    </div>
-</div>
-""", unsafe_allow_html=True)
 
 # ── Metric badge helper ───────────────────────────────────────────────────────
 def _badge(metric, value):
@@ -1088,7 +995,7 @@ elif _state == "analyze_form":
             _f_period_lbl = st.selectbox("Period", ["1M", "6M", "1Y", "2Y", "5Y"],
                                          index=2, key="form_period_sel")
         with _fsb:
-            _f_currency = st.selectbox("Currency", ["$ USD", "₪ ILS", "€ EUR"],
+            _f_currency = st.selectbox("Currency", ["$ USD", "₪ ILS"],
                                        index=0, key="form_currency_sel")
         with _fsc:
             _f_benchmark = st.selectbox("Benchmark",
@@ -1156,7 +1063,7 @@ input_mode = _input_mode or "Amount"
 
 if input_mode == "Amount":
     _currency = st.sidebar.segmented_control(
-        "Currency", options=["₪ ILS", "$ USD", "€ EUR"], default="$ USD",
+        "Currency", options=["₪ ILS", "$ USD"], default="$ USD",
         key="currency_seg", label_visibility="collapsed",
     )
     currency_symbol = (_currency or "$ USD").split(" ")[0]
@@ -1402,8 +1309,13 @@ else:
         sign = "+" if pos else ""
 
         ils_rate = None
-        if "USD/ILS" in tickers_data and tickers_data["USD/ILS"][0]:
-            ils_rate = tickers_data["USD/ILS"][0]
+        try:
+            from _navbar import _fetch_tickers as _ft
+            _td = _ft()
+            if "USD/ILS" in _td and _td["USD/ILS"][0]:
+                ils_rate = _td["USD/ILS"][0]
+        except Exception:
+            pass
 
         compare_text = f"vs. {csym}{prev_val:,.0f} {_period_label_map.get(period_used, 'a year ago')}"
         if ils_rate and csym == "$":
@@ -1427,7 +1339,7 @@ else:
         st.markdown(f"""
 <div class="pv-card">
   <div class="pv-label">
-    PORTFOLIO VALUE &nbsp;·&nbsp; {csym.replace("$","USD").replace("₪","ILS").replace("€","EUR")} VALUE
+    PORTFOLIO VALUE &nbsp;·&nbsp; {csym.replace("$","USD").replace("₪","ILS")} VALUE
   </div>
   <div class="pv-amount">{csym}{int_part}<span class="cents">{dec_part}</span></div>
   <div class="pv-change-row">
@@ -1776,6 +1688,43 @@ else:
                 fig_ef, use_container_width=True,
                 on_select="rerun", selection_mode="points", key="frontier_chart",
             )
+
+            # ── Optimizer tip ─────────────────────────────────────────
+            try:
+                _opt = optimize_portfolio(
+                    returns, strategy="max_sharpe",
+                    risk_free_rate=summary["risk_free_rate"],
+                )
+                _opt_sharpe = _opt["sharpe"]
+                _cur_sharpe = pm["sharpe"]
+                _cur_w = {h["ticker"]: h["weight"] for h in holdings}
+
+                if _opt_sharpe > _cur_sharpe + 0.08:
+                    _deltas = {t: _opt["weights"].get(t, 0) - _cur_w.get(t, 0) for t in returns.columns}
+                    _sell = min(_deltas, key=_deltas.get)
+                    _buy  = max(_deltas, key=_deltas.get)
+                    _sell_pct = abs(_deltas[_sell]) * 100
+                    _buy_pct  = abs(_deltas[_buy])  * 100
+                    _vol_gain = (_opt["volatility"] - pm["volatility"]) * 100
+                    _vol_str  = f"{abs(_vol_gain):.1f}% {'less' if _vol_gain < 0 else 'more'} volatility"
+                    st.info(
+                        f"**Tip:** Shifting ~{_sell_pct:.0f}% from **{_sell}** into **{_buy}** "
+                        f"could raise your Sharpe ratio from {_cur_sharpe:.2f} to {_opt_sharpe:.2f} "
+                        f"({_vol_str}, similar return). Click a point on the frontier above to explore any allocation."
+                    )
+                elif _opt_sharpe > _cur_sharpe + 0.02:
+                    st.info(
+                        f"**Tip:** Your portfolio is close to the efficient frontier "
+                        f"(Sharpe {_cur_sharpe:.2f} vs optimal {_opt_sharpe:.2f}). "
+                        f"Small rebalancing could help — explore the white curve above."
+                    )
+                else:
+                    st.success(
+                        f"Your portfolio sits on or near the efficient frontier (Sharpe {_cur_sharpe:.2f}). "
+                        f"No major rebalancing needed."
+                    )
+            except Exception:
+                pass  # silently skip if optimizer fails (e.g. too few assets)
 
             if event.selection and event.selection.points:
                 pt = event.selection.points[0]

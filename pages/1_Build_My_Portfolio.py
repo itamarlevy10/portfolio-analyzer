@@ -1,12 +1,21 @@
 import streamlit as st
 import anthropic
 import json
-from main import build_portfolio, calculate_returns
-from risk_metrics import get_portfolio_summary, calculate_portfolio_metrics
+import sys, os; sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+from _navbar import render_navbar
 
+# hide sidebar entirely on this page
+st.markdown("""
+<style>
+section[data-testid="stSidebar"] { display: none !important; }
+button[data-testid="stSidebarCollapsedControl"] { display: none !important; }
+</style>
+""", unsafe_allow_html=True)
 
-st.title("🏗️ Build My Portfolio")
-st.subheader("Answer 5 questions. Get a personalized AI-designed portfolio in seconds.")
+render_navbar()
+
+st.title("Build My Portfolio")
+st.subheader("Answer a few questions and get a personalized AI-designed portfolio in seconds.")
 st.divider()
 
 # ── API Key Check ──────────────────────────────────────────────────────────────
@@ -34,7 +43,7 @@ with st.form("build_form"):
         )
         currency = st.selectbox(
             "Currency",
-            options=["$ USD", "₪ ILS", "€ EUR"],
+            options=["$ USD", "₪ ILS"],
         )
 
     with col_right:
@@ -231,42 +240,54 @@ if "build_portfolios" in st.session_state:
 
             st.markdown("")
 
-            # analyze button — runs full analysis and stores in session state
-            if st.button(
-                "📊 Analyze This Portfolio",
-                key=f"analyze_built_{i}",
-                type="primary",
-                use_container_width=True,
-            ):
-                _selected = [
-                    {"ticker": h["ticker"], "weight": h["weight"]}
-                    for h in holdings
-                    if h.get("ticker") and h.get("weight", 0) > 0
-                ]
+    # ── Follow-up Chat ─────────────────────────────────────────────────────────
+    st.divider()
+    st.subheader("Ask a follow-up question")
+    st.caption("Ask Claude anything about these portfolios — risks, alternatives, how to get started, tax implications, anything.")
 
-                with st.spinner("Running full risk analysis..."):
-                    try:
-                        _prices = build_portfolio(_selected, period="1y")
-                        _returns = calculate_returns(_prices)
-                        _summary = get_portfolio_summary(_returns, benchmark="SPY")
-                        _pm = calculate_portfolio_metrics(
-                            _returns, _selected,
-                            risk_free_rate=_summary["risk_free_rate"],
-                        )
-                        # store results so the main Analyze page can display them
-                        st.session_state["analysis"] = {
-                            "returns": _returns,
-                            "holdings": _selected,
-                            "summary": _summary,
-                            "portfolio_metrics": _pm,
-                            "period": "1y",
-                        }
-                        st.session_state.pop("opt_result", None)
-                        st.session_state.pop("opt_frontier", None)
+    if "followup_history" not in st.session_state:
+        st.session_state["followup_history"] = []
 
-                        st.success(
-                            f"✅ **{portfolio.get('name')} Portfolio** is loaded!"
-                        )
-                        st.switch_page("pages/analyze.py")
-                    except Exception as _e:
-                        st.error(f"Analysis failed: {_e}")
+    # render past messages
+    for msg in st.session_state["followup_history"]:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+
+    # build portfolio context string once
+    _port_ctx = "\n\n".join(
+        f"**{p['name']}** ({p.get('risk_level','?')} risk, {p.get('expected_return_range','?')} expected):\n"
+        + "\n".join(f"  - {h['ticker']} ({h['name']}): {round(h['weight']*100,1)}% — {h['reason']}"
+                    for h in p.get("holdings", []))
+        for p in portfolios
+    )
+    _followup_system = (
+        "You are a portfolio advisor helping a young investor understand their personalised portfolio options. "
+        "Answer concisely and in plain language. Avoid jargon unless you explain it. "
+        "The three portfolios you designed for this user are:\n\n" + _port_ctx
+    )
+
+    if question := st.chat_input("e.g. What are the main risks of the Aggressive option?"):
+        st.session_state["followup_history"].append({"role": "user", "content": question})
+        with st.chat_message("user"):
+            st.markdown(question)
+
+        with st.chat_message("assistant"):
+            with st.spinner("Claude is thinking..."):
+                try:
+                    _client = anthropic.Anthropic(api_key=_api_key)
+                    _messages = [
+                        {"role": m["role"], "content": m["content"]}
+                        for m in st.session_state["followup_history"]
+                    ]
+                    _resp = _client.messages.create(
+                        model="claude-sonnet-4-6",
+                        max_tokens=1024,
+                        system=[{"type": "text", "text": _followup_system,
+                                 "cache_control": {"type": "ephemeral"}}],
+                        messages=_messages,
+                    )
+                    _answer = _resp.content[0].text
+                    st.markdown(_answer)
+                    st.session_state["followup_history"].append({"role": "assistant", "content": _answer})
+                except Exception as _e:
+                    st.error(f"Could not get a response: {_e}")
