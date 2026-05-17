@@ -4,7 +4,6 @@ import json
 from main import build_portfolio, calculate_returns
 from risk_metrics import get_portfolio_summary, calculate_portfolio_metrics
 
-st.set_page_config(page_title="Build My Portfolio", page_icon="🏗️", layout="wide")
 
 st.title("🏗️ Build My Portfolio")
 st.subheader("Answer 5 questions. Get a personalized AI-designed portfolio in seconds.")
@@ -52,11 +51,12 @@ with st.form("build_form"):
             help="Which market you prefer to invest in",
         )
 
-    risk = st.select_slider(
+    risk_val = st.slider(
         "⚖️ Risk tolerance",
-        options=["Conservative", "Balanced", "Aggressive"],
-        value="Balanced",
-        help="Conservative = stability first. Aggressive = maximize growth potential.",
+        min_value=0,
+        max_value=100,
+        value=50,
+        help="0 = most conservative (bonds & ETFs). 100 = most aggressive (high-growth stocks).",
     )
 
     avoid = st.multiselect(
@@ -75,6 +75,13 @@ with st.form("build_form"):
 if submitted:
     currency_symbol = currency.split(" ")[0]
     avoid_str = ", ".join(avoid) if avoid else "none"
+    risk_desc = (
+        "Very conservative (heavy bonds/ETFs, minimal stock exposure)" if risk_val <= 20 else
+        "Conservative (mostly ETFs, small stock allocation)" if risk_val <= 40 else
+        "Balanced (mix of ETFs and quality stocks)" if risk_val <= 60 else
+        "Moderately aggressive (growth stocks + some ETFs)" if risk_val <= 80 else
+        "Very aggressive (concentrated high-growth stocks, minimal hedging)"
+    )
 
     # build the structured prompt — very explicit about JSON format so Claude follows it
     _prompt = f"""You are a portfolio advisor for young investors (18-30 years old).
@@ -82,7 +89,7 @@ if submitted:
 The investor answered these questions:
 - Investment amount: {currency_symbol}{amount:,}
 - Time horizon: {horizon}
-- Risk tolerance: {risk}
+- Risk tolerance: {risk_val}/100 — {risk_desc}
 - Sectors to avoid: {avoid_str}
 - Asset preference: {market}
 
@@ -165,7 +172,7 @@ Respond with ONLY valid JSON — no text before or after. Exact schema:
                 "amount": amount,
                 "currency": currency_symbol,
                 "horizon": horizon,
-                "risk": risk,
+                "risk": f"{risk_val}/100",
                 "avoid": avoid,
                 "market": market,
             }
@@ -258,9 +265,8 @@ if "build_portfolios" in st.session_state:
                         st.session_state.pop("opt_frontier", None)
 
                         st.success(
-                            f"✅ **{portfolio.get('name')} Portfolio** is loaded! "
-                            "Navigate to **📊 Analyze My Portfolio** (in the sidebar) "
-                            "to see the full analysis, charts, and backtest."
+                            f"✅ **{portfolio.get('name')} Portfolio** is loaded!"
                         )
+                        st.switch_page("pages/analyze.py")
                     except Exception as _e:
                         st.error(f"Analysis failed: {_e}")

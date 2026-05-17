@@ -1,106 +1,92 @@
-# Portfolio Analyzer — AI-Powered Investment Analysis
+# Portfolio Analyzer
 
-> A full-stack financial analytics platform built for the next generation of Israeli investors — no finance degree required.
-
-Portfolio Analyzer lets you build a custom stock portfolio, analyze its risk in plain language, optimize weights using modern portfolio theory, backtest against real historical data, and get AI-generated recommendations — all from a clean Streamlit web interface.
+A stock portfolio analysis tool built for young Israeli investors. Add your holdings, and the app calculates risk metrics, optimizes weights, backtests historical performance, and generates AI-powered recommendations — all in plain language.
 
 ---
 
-## Features
+## What it does
 
-- 📊 **Portfolio Builder** — enter holdings by dollar amount or weight %, supporting ILS / USD / EUR
-- 🔍 **200+ Preloaded Assets** — Israeli and US stocks, ETFs, and indices; live yfinance search for anything else
-- 📉 **Risk Metrics Per Asset** — Volatility, Sharpe Ratio, Beta, Max Drawdown, Value at Risk (95%), Correlation Matrix
-- 🎨 **Plain-Language Explanations** — color-coded 🟢🟡🔴 summaries so any investor understands their exposure
-- 📈 **Interactive Charts** — cumulative returns (Plotly), correlation heatmap, sector allocation donut
-- 🏦 **Dual Benchmark Support** — compare against SPY (S&P 500) or ^TA125.TA (Tel Aviv 125)
-- ⏱️ **Flexible Time Periods** — 6 months, 1 year, 2 years, 5 years
-- 🧮 **Portfolio Optimizer** — Markowitz efficient frontier via PyPortfolioOpt; suggests optimal weight allocation
-- 🔁 **Backtester** — simulate historical performance with custom strategies using vectorbt
-- 🤖 **AI Advisor** — Claude API integration delivers personalized, plain-language portfolio recommendations
-- 💾 **Portfolio Persistence** — save and auto-load portfolios across sessions
+- Build a portfolio by dollar amount or weight %, with support for ILS, USD, and EUR
+- Search 200+ Israeli and US stocks, ETFs, and indices (or search any ticker via Yahoo Finance)
+- See per-asset risk metrics: volatility, Sharpe ratio, Beta, max drawdown, VaR (95%), and correlation
+- Compare against SPY or the Tel Aviv 125 index across 6M, 1Y, 2Y, or 5Y windows
+- Run Markowitz optimization to find the efficient frontier and suggested weight allocation
+- Backtest against real historical data using vectorbt
+- Get personalized analysis from Claude (Anthropic's AI) in plain language
+- Use the portfolio builder to answer 5 questions and get 3 AI-designed portfolio options
 
 ---
 
-## Tech Stack
+## Tech stack
 
-| Layer | Technology |
+| Layer | Library |
 |---|---|
-| Frontend / UI | [Streamlit](https://streamlit.io/) |
-| Data | [yfinance](https://github.com/ranaroussi/yfinance) |
-| Visualization | [Plotly](https://plotly.com/python/) |
-| Risk & Math | [pandas](https://pandas.pydata.org/), [NumPy](https://numpy.org/), [SciPy](https://scipy.org/) |
-| Portfolio Optimization | [PyPortfolioOpt](https://pyportfolioopt.readthedocs.io/) |
-| Backtesting | [vectorbt](https://vectorbt.dev/) |
-| AI Recommendations | [Claude API](https://www.anthropic.com/) (Anthropic) |
+| UI | Streamlit |
+| Market data | yfinance |
+| Charts | Plotly |
+| Math / risk | pandas, NumPy, SciPy |
+| Optimization | PyPortfolioOpt |
+| Backtesting | vectorbt |
+| AI | Claude API (Anthropic) |
 | Language | Python 3.11 |
 
 ---
 
-## How to Run Locally
+## Running locally
 
-**Prerequisites:** Python 3.11+
+Requires Python 3.11+.
 
 ```bash
-# 1. Clone the repository
 git clone https://github.com/YOUR_USERNAME/portfolio-analyzer.git
 cd portfolio-analyzer
 
-# 2. Create and activate a virtual environment
 python -m venv venv
-source venv/bin/activate        # macOS / Linux
-# venv\Scripts\activate         # Windows
+source venv/bin/activate       # macOS / Linux
+# venv\Scripts\activate        # Windows
 
-# 3. Install dependencies
 pip install -r requirements.txt
+```
 
-# 4. (Optional) Add your Claude API key for the AI Advisor feature
+To enable the AI advisor, add your Anthropic API key:
+
+```bash
 mkdir -p .streamlit
-echo '[anthropic]\napi_key = "YOUR_API_KEY"' > .streamlit/secrets.toml
+echo 'ANTHROPIC_API_KEY = "sk-ant-..."' > .streamlit/secrets.toml
+```
 
-# 5. Launch the app
+Then run:
+
+```bash
 streamlit run app.py
 ```
 
-The app opens at `http://localhost:8501`.
+Opens at `http://localhost:8501`.
 
 ---
 
-## Screenshots
-
-> _Coming soon — UI screenshots and demo GIF._
-
----
-
-## Project Structure
+## Project structure
 
 ```
 portfolio_analyzer/
-├── app.py              # Streamlit UI — sidebar, charts, results display
-├── main.py             # Data layer — fetch prices, build portfolio, sector data
-├── risk_metrics.py     # Calculations — Sharpe, Beta, VaR, Drawdown, Correlation
-├── optimizer.py        # Portfolio optimizer — efficient frontier, weight suggestions
-├── backtester.py       # Backtesting engine — historical simulation via vectorbt
-├── requirements.txt    # Python dependencies
+├── app.py              # Navigation entrypoint
+├── pages/
+│   ├── analyze.py      # Main analysis page — sidebar, charts, metrics, AI advisor
+│   └── 1_Build_My_Portfolio.py  # AI portfolio builder questionnaire
+├── main.py             # Data layer — fetch prices, build portfolio, sectors
+├── risk_metrics.py     # Risk calculations — Sharpe, Beta, VaR, drawdown, correlation
+├── optimizer.py        # Efficient frontier and weight optimization
+├── backtester.py       # Historical simulation via vectorbt
+├── requirements.txt
 └── .streamlit/
     └── secrets.toml    # API keys (not committed)
 ```
 
 ---
 
-## Built With AI Tools
-
-This project was developed using:
-
-- **[Claude Code](https://www.anthropic.com/claude-code)** — Anthropic's AI coding assistant, used throughout development for architecture decisions, debugging, and feature implementation
-- **[Claude API](https://www.anthropic.com/)** — Powers the in-app AI Advisor feature, delivering personalized portfolio analysis in plain language
-
----
-
 ## License
 
-MIT License — free to use, modify, and distribute.
+MIT
 
 ---
 
-_Built by [Itamar Levy](mailto:itamarlevy10@gmail.com) · Designed for Israeli investors aged 18–30_
+Built by [Itamar Levy](mailto:itamarlevy10@gmail.com)
