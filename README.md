@@ -1,12 +1,35 @@
-# Portfolio Analyzer
+# Portfolio Analyzer — AI-Powered Investment Analysis Tool
 
-A stock portfolio analysis tool built for young Israeli investors. Add your holdings, and the app calculates risk metrics, optimizes weights, backtests historical performance, and generates AI-powered recommendations — all in plain language.
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-Streamlit-FF4B4B?style=for-the-badge&logo=streamlit)](https://portfolio-analyzer-m8xhi4ew9sbezetiwb6ub4.streamlit.app)
+[![Python](https://img.shields.io/badge/Python-3.11-blue?style=for-the-badge&logo=python)](https://python.org)
+
+A full-stack web application for analyzing stock portfolios — built for young investors who want institutional-grade insights without a finance degree. Built with Python, Streamlit, and Claude API. Deployed and live.
+
+---
+
+## Live Demo
+https://portfolio-analyzer-m8xhi4ew9sbezetiwb6ub4.streamlit.app
+
+---
+
+## Why I Built This
+I wanted exposure to important tools and learn how to build a real full-stack app. I saw the need to visualize my own portfolio as an opportunity to work on exactly that — so I built something that solves a real problem while letting me get hands-on with Python, Streamlit, and the Claude API in practice.
+
+---
+
+## Screenshots
+
+![Home Screen](assets/SCR-20260526-nsdo.png)
+
+![Dashboard & Performance](assets/SCR-20260526-nsnw.png)
+
+![Portfolio Builder](assets/SCR-20260526-nsvs.png)
 
 ---
 
 ## What it does
 
-- Build a portfolio by dollar amount or weight %, with support for ILS, USD, and EUR
+- Build and analyze a portfolio with support for ILS and USD
 - Search 200+ Israeli and US stocks, ETFs, and indices (or search any ticker via Yahoo Finance)
 - See per-asset risk metrics: volatility, Sharpe ratio, Beta, max drawdown, VaR (95%), and correlation
 - Compare against SPY or the Tel Aviv 125 index across 6M, 1Y, 2Y, or 5Y windows
@@ -37,7 +60,7 @@ A stock portfolio analysis tool built for young Israeli investors. Add your hold
 Requires Python 3.11+.
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/portfolio-analyzer.git
+git clone https://github.com/itamarlevy10/portfolio-analyzer.git
 cd portfolio-analyzer
 
 python -m venv venv
@@ -80,12 +103,6 @@ portfolio_analyzer/
 └── .streamlit/
     └── secrets.toml    # API keys (not committed)
 ```
-
----
-
-## License
-
-MIT
 
 ---
 
