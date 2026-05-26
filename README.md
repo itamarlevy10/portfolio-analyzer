@@ -13,7 +13,7 @@ https://portfolio-analyzer-m8xhi4ew9sbezetiwb6ub4.streamlit.app
 ---
 
 ## Why I Built This
-I wanted exposure to important tools and learn how to build a real full-stack app. I saw the need to visualize my own portfolio as an opportunity to work on exactly that — so I built something that solves a real problem while letting me get hands-on with Python, Streamlit, and the Claude API in practice.
+I wanted exposure to important tools and learn how to build a real full-stack app. I saw the need to visualize my own portfolio as an opportunity to work on exactly that — so I built something that answered a need I had while letting me get hands-on with Python, Streamlit, and the Claude API in practice.
 
 ---
 
@@ -30,7 +30,7 @@ I wanted exposure to important tools and learn how to build a real full-stack ap
 ## What it does
 
 - Build and analyze a portfolio with support for ILS and USD
-- Search 200+ Israeli and US stocks, ETFs, and indices (or search any ticker via Yahoo Finance)
+- Search stocks, ETFs, and indices (data from Yahoo Finance)
 - See per-asset risk metrics: volatility, Sharpe ratio, Beta, max drawdown, VaR (95%), and correlation
 - Compare against SPY or the Tel Aviv 125 index across 6M, 1Y, 2Y, or 5Y windows
 - Run Markowitz optimization to find the efficient frontier and suggested weight allocation
